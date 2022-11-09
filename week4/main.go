@@ -1,27 +1,57 @@
 package main
 
-// type HelloWorldServiceImpl struct{}
+import (
+	"context"
+	"fmt"
+	"time"
+	"week4/client"
+	"week4/core"
+	"week4/server"
+)
 
-// func (h *HelloWorldServiceImpl) GetPsmInfo(cluster string) string {
-// 	return "data.byte.diff" + ":" + cluster
-// }
+type HelloWorldServiceImpl struct{}
 
-// func call() {
-// 	time.Sleep(5 * time.Second)
-// 	cli := client.NewKrpcClient()
-// 	cli.Call(&core.Message{RpcInfo: &core.RpcInfo{ServiceName: "HelloWorldServiceImpl", MethodName: "GetPsmInfo", Param: []interface{}{"haokaizhao"}}})
-// }
+func (h *HelloWorldServiceImpl) GetPsmInfo(cluster string) string {
+	return "data.byte.diff" + ":" + cluster
+}
 
-// func main() {
-// 	srv := server.NewKrpcServer(server.NewKrpcOptionWithDefaultMode("127.0.0.1", "10011", "tcp"))
-// 	srv.Register(&HelloWorldServiceImpl{})
-// 	err := srv.Serve()
-// 	go call()
-// 	select {
-// 	case er := <-err:
-// 		{
-// 			fmt.Printf("[krpcServer] connect error %+v", er)
-// 		}
-// 	}
+// call执行测试test
+func call() {
+	time.Sleep(5 * time.Second)
+	cli, err := client.NewDefaultClient(&client.Option{ServerIp: "127.0.0.1", ServerPort: "10011", ServerProtocol: "tcp"})
+	if err != nil {
+		fmt.Printf("client create error: %v\n", err)
+	}
+	// 插入中间件  打印参数和结果
+	cli.Use(func(e core.Endpoint) core.Endpoint {
+		return func(ctx context.Context, req, resp *core.Message) error {
+			fmt.Printf("client req : %v \n", req.RpcInfo)
+			return e(ctx, req, resp)
+		}
+	})
+	request := &core.Message{RpcInfo: &core.RpcInfo{ServiceName: "HelloWorldServiceImpl", MethodName: "GetPsmInfo", Param: []interface{}{"haokaizhao"}}}
+	if _, err := cli.Call(request); err != nil {
+		fmt.Printf("client call error: %v\n", err)
+	}
+}
 
-// }
+func main() {
+	srv, err := server.NewDefaultServer(&server.Option{ServerIp: "127.0.0.1", ServerPort: "10011", ServerProtocol: "tcp"})
+	if err != nil {
+		fmt.Printf("server crete error: %v\n", err)
+	}
+	// 插入中间件打印request和response
+	srv.Use(func(e core.Endpoint) core.Endpoint {
+		return func(ctx context.Context, req, resp *core.Message) error {
+			fmt.Printf("server req: %v\n", req.RpcInfo)
+			return e(ctx, req, resp)
+		}
+	})
+	srv.Register(&HelloWorldServiceImpl{})
+	errchan := srv.Serve()
+	go call()
+	select {
+	case er := <-errchan:
+		fmt.Printf("server get a err from request: %v\n", er)
+	}
+}

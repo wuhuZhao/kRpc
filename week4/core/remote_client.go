@@ -1,7 +1,6 @@
 package core
 
 import (
-	"fmt"
 	"net"
 	"week4/codec"
 )
@@ -12,17 +11,14 @@ type krpcClient struct {
 	co codec.Codec
 }
 
-func (k *krpcClient) Call(conn net.Conn, ep Endpoint, request *Message) (*Message, error) {
+func (k *krpcClient) Call(conn net.Conn, request *Message, response *Message) error {
 	if er := k.co.Encode(conn, request); er != nil {
-		fmt.Printf("[kRpcClient] error encode %v\n", er)
-		return nil, er
+		return er
 	}
-	var resp *Message
-	if er := k.co.Decode(conn, resp); er != nil {
-		fmt.Printf("[kRpcClient] error decode %v\n", er)
-		return nil, er
+	if er := k.co.Decode(conn, response); er != nil {
+		return er
 	}
-	return resp, nil
+	return nil
 }
 
 func NewKrpcClient() *krpcClient {

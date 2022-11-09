@@ -17,5 +17,5 @@ type RemoteServer interface {
 
 // 是krpcClient的高级封装，可以实现不同的krpcClient
 type RemoteClient interface {
-	Call(conn net.Conn, ep Endpoint, request *Message) (*Message, error)
+	Call(conn net.Conn, request *Message, resp *Message) error
 }

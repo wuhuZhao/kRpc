@@ -22,8 +22,7 @@ func (k *krpcServer) Init() error {
 
 // 真正的transport调用，只需要传入封装好的中间件以及call，最后实现一个 encode-> (middleware -> call) - > decode 的模型
 func (k *krpcServer) Transport(conn net.Conn, ep Endpoint, ch chan error) {
-	var req *Message
-	var resp *Message
+	req, resp := &Message{}, &Message{RpcInfo: &RpcInfo{}}
 	if er := k.co.Decode(conn, req); er != nil {
 		ch <- er
 	}

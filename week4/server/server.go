@@ -10,9 +10,9 @@ import (
 )
 
 type Option struct {
-	serverIp       string
-	serverPort     string
-	serverProtocol string
+	ServerIp       string
+	ServerPort     string
+	ServerProtocol string
 }
 
 type Server struct {
@@ -78,6 +78,7 @@ func (s *Server) Use(mdw core.Middleware) {
 	s.mds = append(s.mds, mdw)
 }
 
+//   不需要修改  request -> middleware-> send
 // 然后通过for循环去组装dfs 不要用递归，这样就能控制递归的顺序了，client和server应该相反
 func (s *Server) chain(ep core.Endpoint) core.Endpoint {
 	for i := len(s.mds) - 1; i >= 0; i-- {
@@ -126,7 +127,7 @@ func (s *Server) Register(serviceImpl interface{}) {
 
 // 返回默认的服务端，使用krpcServer作为底层去使用
 func NewDefaultServer(opt *Option) (*Server, error) {
-	listen, err := net.Listen(opt.serverProtocol, opt.serverIp+":"+opt.serverPort)
+	listen, err := net.Listen(opt.ServerProtocol, opt.ServerIp+":"+opt.ServerPort)
 	if err != nil {
 		return nil, err
 	}
