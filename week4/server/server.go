@@ -6,6 +6,7 @@ import (
 	"net"
 	"reflect"
 	"sync"
+	"time"
 	"week4/core"
 )
 
@@ -13,6 +14,8 @@ type Option struct {
 	ServerIp       string
 	ServerPort     string
 	ServerProtocol string
+	// 用于自定义的customizeProps 方便开发者自己自定义启动Hooks
+	CustomizeProps map[string]interface{}
 }
 
 type Server struct {
@@ -26,19 +29,23 @@ type Server struct {
 	mds           []core.Middleware
 	// 可以选择自己的net库，但目前不开放，转向使用Option去直接给生成
 	ln net.Listener
-	m  *sync.Mutex
+	// 启动时调用各种组件，仅在启动时调用
+	shs []StartHook
+	m   *sync.Mutex
+	// 保存相关配置
+	opt *Option
 }
 
-// 真正初始化的地方,通用化ln和remoteServer
-func (s *Server) init(ln net.Listener, remoteServer core.RemoteServer) {
+// 真正初始化的地方,通用化ln和remoteServer, Option里的配置也保存一下，用于钩子函数的实现也可以注册相关自定义启动的钩子函数
+func (s *Server) init(ln net.Listener, remoteServer core.RemoteServer, opt *Option) {
 	s.invokeHandler = s.serverEndpoint
 	s.ln = ln
+	s.opt = opt
 	s.remoteServer = remoteServer
 	s.service = map[string]map[string]struct{}{}
 	s.method = map[string]reflect.Value{}
 	s.mds = []core.Middleware{}
 	s.m = &sync.Mutex{}
-
 }
 
 // 调用真正反射的方法去完成一次rpc调用，不放在中间件中，但是以中间件的形式
@@ -68,11 +75,6 @@ func (s *Server) serverEndpoint(ctx context.Context, request *core.Message, resp
 	return nil
 }
 
-// 添加中间件, 不断dfs下去，func套func完成中间件的调用层级，init的时候为reflect调用的ep, 用slice append 然后通过for循环去组装dfs 不要用递归，这样就能控制递归的顺序了，client和server应该相反
-// func (s *Server) Use(next core.Middleware) {
-// 	s.ep = next(s.ep)
-// }
-
 // 添加中间件, 不断dfs下去，func套func完成中间件的调用层级，init的时候为reflect调用的ep, 用slice append
 func (s *Server) Use(mdw core.Middleware) {
 	s.mds = append(s.mds, mdw)
@@ -93,6 +95,10 @@ func (s *Server) Serve() chan error {
 	s.eps = s.chain(s.invokeHandler)
 	// 经典阻塞式IO模型，这样在gorutine多的时候会导致很多的调度开销
 	go func(ln net.Listener, c chan error) {
+		// 调用钩子函数注册
+		for i := 0; i < len(s.shs); i++ {
+			s.shs[i](s.opt)
+		}
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
@@ -136,6 +142,15 @@ func NewDefaultServer(opt *Option) (*Server, error) {
 		return nil, err
 	}
 	server := &Server{}
-	server.init(listen, krpcServer)
+	server.init(listen, krpcServer, opt)
+	// todo init的时候插入框架侧的hooks，走默认配置
+	// todo  从yaml里拿到服务的信息，目前先写死
+	createRegisterOption(server.opt, &RegistrationConfig{
+		ID:   fmt.Sprintf("%d\n", time.Now().Unix()),
+		Name: "krpcServer",
+		Tags: []string{"krpc", "dc1", "cn"},
+	})
+	// 注册服务到consul里
+	server.shs = append(server.shs, RegisterService)
 	return server, nil
 }

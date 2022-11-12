@@ -5,6 +5,7 @@ import (
 	"net"
 )
 
+// 一次请求的形式 ctx req resp都需要包含
 type Endpoint func(ctx context.Context, req *Message, resp *Message) error
 
 // 是krpcServer的高级封装，可以实现不同的krpcServer

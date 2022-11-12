@@ -2,14 +2,21 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"net"
+	"strconv"
 	"week4/core"
+
+	consulapi "github.com/hashicorp/consul/api"
 )
+
+const consulAddress = "127.0.0.1:8500"
 
 type Option struct {
 	ServerIp       string
 	ServerPort     string
 	ServerProtocol string
+	ServiceName    string
 }
 
 type Client struct {
@@ -63,8 +70,29 @@ func (c *Client) Use(md core.Middleware) {
 	c.mds = append(c.mds, md)
 }
 
+// consul服务发现
+func (c *Client) Discovery(serviceName string) *consulapi.ServiceEntry {
+	config := consulapi.DefaultConfig()
+	config.Address = consulAddress
+	client, err := consulapi.NewClient(config)
+	if err != nil {
+		fmt.Println("consul client error : ", err)
+	}
+
+	service, _, err := client.Health().Service(serviceName, "", false, nil)
+	if err != nil {
+		fmt.Println("consul client get serviceIp error : ", err)
+	}
+	return service[0]
+}
+
 func NewDefaultClient(option *Option) (*Client, error) {
 	client := &Client{}
+	if option.ServiceName != "" {
+		service := client.Discovery(option.ServiceName)
+		option.ServerIp = service.Service.Address
+		option.ServerPort = strconv.Itoa(service.Service.Port)
+	}
 	conn, err := net.Dial(option.ServerProtocol, option.ServerIp+":"+option.ServerPort)
 	if err != nil {
 		return nil, err

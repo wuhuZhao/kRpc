@@ -18,7 +18,7 @@ func (h *HelloWorldServiceImpl) GetPsmInfo(cluster string) string {
 // call执行测试test
 func call() {
 	time.Sleep(5 * time.Second)
-	cli, err := client.NewDefaultClient(&client.Option{ServerIp: "127.0.0.1", ServerPort: "10011", ServerProtocol: "tcp"})
+	cli, err := client.NewDefaultClient(&client.Option{ServerProtocol: "tcp", ServiceName: "krpcServer"})
 	if err != nil {
 		fmt.Printf("client create error: %v\n", err)
 	}
@@ -30,6 +30,10 @@ func call() {
 		}
 	})
 	request := &core.Message{RpcInfo: &core.RpcInfo{ServiceName: "HelloWorldServiceImpl", MethodName: "GetPsmInfo", Param: []interface{}{"haokaizhao"}}}
+	if _, err := cli.Call(request); err != nil {
+		fmt.Printf("client call error: %v\n", err)
+	}
+	request = &core.Message{RpcInfo: &core.RpcInfo{ServiceName: "HelloWorldServiceImpl", MethodName: "GetPsmInfo", Param: []interface{}{"jasonbsun"}}}
 	if _, err := cli.Call(request); err != nil {
 		fmt.Printf("client call error: %v\n", err)
 	}
