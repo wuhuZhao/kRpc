@@ -1,0 +1,5 @@
+service:
+  psm: krpcServer
+  port: 10011
+  ip: 172.18.0.1
+  protocol: tcp

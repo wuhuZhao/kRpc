@@ -1,0 +1,15 @@
+# message必须顺序声明 暂时不考虑tag的idx
+message:
+  request:
+    id: int32
+  response:
+    names: repeat string
+
+interface:
+  getResponse:
+    in:
+      req: request
+    out: 
+      resp: response
+      msg: string
+
