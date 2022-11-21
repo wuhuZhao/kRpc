@@ -2,6 +2,7 @@ package klog
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 )
@@ -21,7 +22,11 @@ func (d *defaultLogger) setLogger(l *log.Logger) {
 
 var logger FullLogger = &defaultLogger{
 	logLevel: INFO,
-	stdLog:   log.New(os.Stderr, "[Krpc]", log.LstdFlags|log.Lshortfile|log.Lmicroseconds),
+	stdLog:   log.New(os.Stderr, "", log.LstdFlags|log.Lshortfile|log.Lmicroseconds),
+}
+
+func DefaultLogger() FullLogger {
+	return logger
 }
 
 func TraceCtx(ctx context.Context, v ...interface{}) {
@@ -69,6 +74,22 @@ func Warnf(format string, v ...interface{}) {
 }
 func Errf(format string, v ...interface{}) {
 	logger.Errf(format, v...)
+}
+
+func (d *defaultLogger) logf(level Level, format *string, v ...interface{}) {
+	if level > d.logLevel {
+		return
+	}
+	msg := "[Krpc]"
+	if format != nil {
+		msg += fmt.Sprintf(*format, v...)
+	} else {
+		msg += fmt.Sprint(v...)
+	}
+	d.stdLog.Output(4, msg)
+	if level == ERR {
+		os.Exit(1)
+	}
 }
 
 func (d *defaultLogger) TraceCtx(ctx context.Context, v ...interface{}) {
@@ -148,10 +169,7 @@ func (d *defaultLogger) Debugf(format string, v ...interface{}) {
 	d.stdLog.Printf(format, v...)
 }
 func (d *defaultLogger) Infof(format string, v ...interface{}) {
-	if d.logLevel > INFO {
-		return
-	}
-	d.stdLog.Printf(format, v...)
+	d.logf(INFO, &format, v...)
 }
 func (d *defaultLogger) Warnf(format string, v ...interface{}) {
 	if d.logLevel > WARN {
