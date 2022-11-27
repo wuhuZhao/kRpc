@@ -9,7 +9,7 @@ type endpoint func(ctx context.Context, req interface{}) (resp interface{}, err 
 
 type middleware func(ctx context.Context, req interface{}, handler endpoint) (resp interface{}, err error)
 
-type fuck func(endpoint) endpoint
+type warp func(endpoint) endpoint
 
 func main() {
 	mds := []middleware{}
@@ -30,7 +30,7 @@ func main() {
 		return nil, nil
 	}
 	for i := len(mds) - 1; i >= 0; i-- {
-		handler = fuck(func(e endpoint) endpoint {
+		handler = warp(func(e endpoint) endpoint {
 			// 由于go的机制问题如果不用tmp去存下当前的i，那么mds[i]就会取最终的那一个，就会溢出，所以在return前先保存一下i的量，然后每一个stack去存的变量就是对的
 			cur := i
 			return func(ctx context.Context, req interface{}) (resp interface{}, err error) {
