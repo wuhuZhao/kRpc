@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"kRpc/internal/codec"
 	"net"
 )
 
@@ -19,7 +20,7 @@ type RpcInfo struct {
 	// error
 	Err string
 	// Header
-	header map[string]string
+	Header map[string]string
 }
 
 type Request struct {
@@ -33,9 +34,9 @@ type Response struct {
 }
 
 type Kmessage struct {
-	rpcInfo *RpcInfo
-	in      *Request
-	out     *Response
+	RpcInfo *RpcInfo
+	In      *Request
+	Out     *Response
 }
 
 // 一次请求的形式 ctx req resp都需要包含
@@ -43,16 +44,16 @@ type Endpoint func(ctx context.Context, req *Kmessage) (resp *Kmessage, err erro
 
 // 是krpcServer的高级封装，可以实现不同的krpcServer
 type RemoteServer interface {
-	Init() error
-	DecodeRequest(net.Conn, chan error)
-	EncoceResponse(net.Conn, chan error)
+	Init(co codec.Codec) error
+	DecodeRequest(net.Conn, *Kmessage) error
+	EncoceResponse(net.Conn, *Kmessage) error
 	Close() error
 }
 
 // 是krpcClient的高级封装，可以实现不同的krpcClient
 type RemoteClient interface {
-	Init() error
-	EncodeRequest(net.Conn, chan error)
-	DecodeResponse(net.Conn, chan error)
+	Init(co codec.Codec) error
+	EncodeRequest(net.Conn, *Kmessage) error
+	DecodeResponse(net.Conn, *Kmessage) error
 	Close() error
 }
