@@ -24,6 +24,8 @@ type yamlConfig struct {
 		Ip       string `yaml: "ip"`
 		Protocol string `yaml: "protocol"`
 	} `yaml: "service"`
+	Discovery struct {
+	}
 }
 
 type option struct {

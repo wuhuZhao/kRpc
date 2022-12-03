@@ -5,15 +5,10 @@ import (
 	"kRpc/internal/common"
 	"kRpc/internal/core"
 	"kRpc/internal/middleware"
-	"kRpc/pkg/klog"
-	"math/rand"
+	discovry "kRpc/pkg/discovery"
 	"net"
 	"sync"
-
-	consulapi "github.com/hashicorp/consul/api"
 )
-
-const consulAddress = "127.0.0.1:8500"
 
 type Client struct {
 	remoteClient common.RemoteClient
@@ -26,39 +21,13 @@ type Client struct {
 	invokeComplete bool
 }
 
-// todo 后面服务发现应该做成缓存去实现
-func (c *Client) discovery(serviceName string) []*consulapi.ServiceEntry {
-	config := consulapi.DefaultConfig()
-	config.Address = consulAddress
-	client, err := consulapi.NewClient(config)
-	if err != nil {
-		klog.Errf("consul client error: %v", err)
-	}
-	service, _, err := client.Health().Service(serviceName, "", false, nil)
-	if err != nil {
-		klog.Errf("consul client get serviceIp error: %v", err)
-	}
-	return service
-}
-
-// 选择一个consul的节点
-func (c *Client) SelectOnePod(psm string) *consulapi.ServiceEntry {
-	total := c.discovery(psm)
-	return total[rand.Intn(len(total))]
-}
-
-// 返回所有consul节点
-func (c *Client) GetAllPods(psm string) []*consulapi.ServiceEntry {
-	return c.discovery(psm)
-}
-
 func (c *Client) Use(md middleware.Middleware) {
 	c.mds = append(c.mds, md)
 }
 
 // client端的调用
 func (c *Client) handler(ctx context.Context, req *common.Kmessage) (*common.Kmessage, error) {
-	entry := c.SelectOnePod(c.psm)
+	entry := discovry.SelectOnePod(c.psm)
 	//todo 考虑用sync.Map 因为不安全
 	if _, ok := c.conn[entry.Node.Address]; !ok {
 		conn, err := net.Dial("tcp", entry.Node.Address)
