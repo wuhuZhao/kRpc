@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"net/http"
 
 	consulapi "github.com/hashicorp/consul/api"
 )
@@ -35,7 +36,8 @@ func RegisterService(dis DiscoveryConfig) error {
 	// 启动tcp的健康检测，注意address不能使用127.0.0.1或者localhost，因为consul-agent在docker容器里，如果用这个的话，
 	// consul会访问容器里的port就会出错，一直检查不到实例
 	check := &consulapi.AgentServiceCheck{}
-	check.TCP = fmt.Sprintf("%s:%d", registration.Address, registration.Port)
+	check.HTTP = fmt.Sprintf("http://%s:%d/", registration.Address, registration.Port)
+	// check.TCP = fmt.Sprintf("%s:%d", registration.Address, registration.Port)
 	check.Timeout = "5s"
 	check.Interval = "5s"
 	check.DeregisterCriticalServiceAfter = "60s"
@@ -46,6 +48,16 @@ func RegisterService(dis DiscoveryConfig) error {
 		return err
 	}
 	return nil
+}
+
+func startHttp() {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Printf("consul get uri: %s\n", r.RequestURI)
+		w.Write([]byte("hello consul"))
+	})
+	if err := http.ListenAndServe(":10111", nil); err != nil {
+		fmt.Printf("start http server error: %v\n", err)
+	}
 }
 
 func startTcp() {
@@ -76,7 +88,8 @@ func main() {
 		Port:    10111,
 		Address: "192.168.0.124", //通过ifconfig查看本机的eth0的ipv4地址
 	}
-	go startTcp()
+	// go startTcp()
+	go startHttp()
 	RegisterService(dis)
 	// 阻塞等待
 	<-ch
