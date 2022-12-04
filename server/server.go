@@ -19,19 +19,22 @@ import (
 
 type yamlConfig struct {
 	Service struct {
-		Psm      string `yaml: "psm"`
-		Port     string `yaml: "port"`
-		Ip       string `yaml: "ip"`
-		Protocol string `yaml: "protocol"`
-	} `yaml: "service"`
+		Psm      string `yaml:"psm"`
+		Port     int    `yaml:"port"`
+		Ip       string `yaml:"ip"`
+		Protocol string `yaml:"protocol"`
+	} `yaml:"service"`
 	Discovery struct {
-	}
+		Address string `yaml:"address"`
+	} `yaml:"discovery"`
 }
 
 type option struct {
-	ServerIp       string
-	ServerPort     string
-	ServerProtocol string
+	ServerIp         string
+	ServerPort       int
+	ServerProtocol   string
+	DiscoveryAddress string
+	psm              string
 	// 用于自定义的customizeProps 方便开发者自己自定义启动Hooks
 	CustomizeProps map[string]interface{}
 }
@@ -45,7 +48,9 @@ type Server struct {
 	// meta 暂时为使用，应该是配置中心等信息存储在meta当中
 	meta []byte
 	// lock
-	mutex *sync.Mutex
+	mutex      *sync.Mutex
+	startHooks []ServerHooks
+	endHooks   []ServerHooks
 }
 
 // 注入ln和使用的remoteServer实现
@@ -54,12 +59,24 @@ func (s *Server) init(ln *net.Listener, remoteServer common.RemoteServer) {
 	s.remoteServer = remoteServer
 	s.invoke = s.defaultInvoke
 	//todo start hook
-
+	for i := 0; i < len(s.startHooks); i++ {
+		go s.startHooks[i].Start()
+	}
 }
 
 // 注册中间件
 func (s *Server) Use(md middleware.Middleware) {
 	s.mds = append(s.mds, md)
+}
+
+// 启动hooks
+func (s *Server) AddStartHooks(cur ServerHooks) {
+	s.startHooks = append(s.startHooks, cur)
+}
+
+// 结束hooks
+func (s *Server) AddEndHooks(cur ServerHooks) {
+	s.endHooks = append(s.endHooks, cur)
 }
 
 // 注册rpc方法
@@ -193,7 +210,8 @@ func GetDefaultYamlOption() (*option, error) {
 		opt.ServerIp = config.Service.Ip
 		opt.ServerPort = config.Service.Port
 		opt.ServerProtocol = config.Service.Protocol
-		// todo 加上consul注册
+		opt.psm = config.Service.Psm
+		opt.DiscoveryAddress = config.Discovery.Address
 		klog.Infof("get the yaml data: %+v\n", opt)
 		return opt, nil
 	}
@@ -215,24 +233,27 @@ func GetYamlOption(path string) (*option, error) {
 		opt.ServerIp = config.Service.Ip
 		opt.ServerPort = config.Service.Port
 		opt.ServerProtocol = config.Service.Protocol
-		// todo 加上consul注册
+		opt.psm = config.Service.Protocol
+		opt.DiscoveryAddress = config.Discovery.Address
+		//tod 自定义参数需要添加上
 		klog.Infof("get the yaml data: %+v\n", opt)
 		return opt, nil
 	}
 }
 
 // 不读取yaml采用的方式
-func CreateOption(ip, port, protocol, psm string) *option {
+func CreateOption(port int, ip, protocol, psm string) *option {
 	return &option{ServerIp: ip, ServerPort: port, ServerProtocol: protocol, CustomizeProps: map[string]interface{}{}}
 }
 
 func NewDefaultServer(opt *option) (*Server, error) {
 	server := &Server{}
-	defaultListen, err := net.Listen(opt.ServerProtocol, fmt.Sprintf("%s:%s", opt.ServerIp, opt.ServerPort))
+	defaultListen, err := net.Listen(opt.ServerProtocol, fmt.Sprintf("%s:%d", opt.ServerIp, opt.ServerPort))
 	if err != nil {
 		klog.Errf("create default listen error: %v", err.Error())
 		return nil, err
 	}
+	server.AddStartHooks(&RegiserHooks{SerivceName: opt.psm, ServiceIp: opt.ServerIp, ServicePort: opt.ServerPort, ConsulAddress: opt.DiscoveryAddress, UseTcp: true})
 	server.init(&defaultListen, core.NewDefaultKrpcServer())
 	return server, nil
 }
