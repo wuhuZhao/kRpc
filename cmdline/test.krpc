@@ -1,0 +1,16 @@
+version="1"
+
+message Req {
+    int32 id = 0;
+    string name = 1;
+}
+
+message Resp {
+    int32 id = 0 ;
+    string name = 1;
+    string mes = 2;
+}
+
+service {
+    rpc getResp(Req req) return Resp
+}
