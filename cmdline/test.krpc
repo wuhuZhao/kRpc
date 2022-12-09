@@ -12,5 +12,5 @@ message Resp {
 }
 
 service {
-    rpc getResp(Req req) return Resp
+    rpc getResp(Req req) return (Resp resp)
 }

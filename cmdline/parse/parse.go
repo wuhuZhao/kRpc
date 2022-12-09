@@ -2,12 +2,15 @@ package parse
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"kRpc/pkg/klog"
 	"os"
 	"path/filepath"
 	"unicode"
 )
+
+var TypeEnum = []string{"string", "int", "float", "void"}
 
 type ParseError struct {
 	desc string
@@ -71,12 +74,20 @@ func (k *KrpcParse) parse() error {
 		if k.idx+7 < len(k.meta) {
 			if byteSliceEqual(k.meta[k.idx:k.idx+7], "message") {
 				k.idx += 7
-				if err := k.parseMessage(); err != nil {
+				messageName, err := k.parseBlockName()
+				if err != nil {
+					return err
+				}
+				if err := k.parseMessage(messageName); err != nil {
 					return err
 				}
 			} else if byteSliceEqual(k.meta[k.idx:k.idx+7], "service") {
 				k.idx += 7
-				if err := k.parseService(); err != nil {
+				serviceName, err := k.parseBlockName()
+				if err != nil {
+					return err
+				}
+				if err := k.parseService(serviceName); err != nil {
 					return err
 				}
 			} else {
@@ -88,6 +99,20 @@ func (k *KrpcParse) parse() error {
 		k.parseSpace()
 	}
 	return nil
+}
+
+// parse message 后面的名字
+func (k *KrpcParse) parseBlockName() (string, error) {
+	k.parseSpace()
+	start := k.idx
+	for k.idx < len(k.meta) {
+		if k.meta[k.idx] != ' ' && k.meta[k.idx] != '}' {
+			k.idx++
+		} else {
+			break
+		}
+	}
+	return string(k.meta[start:k.idx]), nil
 }
 
 // parse version版本
@@ -139,7 +164,22 @@ func (k *KrpcParse) parseSequenceNumber() (string, error) {
 
 // 解析类型
 func (k *KrpcParse) parseType() (string, error) {
-	return "", nil
+	k.parseSpace()
+	start := k.idx
+	for k.idx < len(k.meta) && k.meta[k.idx] != ' ' {
+		k.idx++
+	}
+	for i := 0; i < len(TypeEnum); i++ {
+		if byteSliceEqual(k.meta[start:k.idx], TypeEnum[i]) {
+			return string(k.meta[start:k.idx]), nil
+		}
+	}
+	for messageName := range k.message {
+		if byteSliceEqual(k.meta[start:k.idx], messageName) {
+			return string(k.meta[start:k.idx]), nil
+		}
+	}
+	return "", &ParseError{desc: fmt.Sprintf("not found the type in %v", TypeEnum)}
 }
 
 // 解析名字
@@ -157,18 +197,32 @@ func (k *KrpcParse) parseName() (string, error) {
 }
 
 // parse message 结构 {string tag1 = 1; string tag2 = 2;} todo 后面需要加上一个状态机
-func (k *KrpcParse) parseMessage() error {
+func (k *KrpcParse) parseMessage(messageName string) error {
 	k.parseSpace()
 	if k.meta[k.idx] != '{' {
 		return &ParseError{desc: "{ should be append after message"}
 	}
 	k.idx++
 	for k.idx < len(k.meta) && k.meta[k.idx] != '}' {
-		k.parseType()
-		k.parseName()
-		k.parseEqual()
-		k.parseSequenceNumber()
-		k.parseDot()
+		t, err := k.parseType()
+		if err != nil {
+			return err
+		}
+		n, err := k.parseName()
+		if err != nil {
+			return err
+		}
+		if err := k.parseEqual(); err != nil {
+			return err
+		}
+		s, err := k.parseSequenceNumber()
+		if err != nil {
+			return err
+		}
+		if err := k.parseDot(); err != nil {
+			return err
+		}
+		k.message[messageName][n] = FieldPair{Type: t, SequenceNumber: s}
 	}
 	if k.meta[k.idx] != '}' || k.idx >= len(k.meta) {
 		return &ParseError{desc: "} should warp the message"}
@@ -178,9 +232,98 @@ func (k *KrpcParse) parseMessage() error {
 	return nil
 }
 
-// parse service
-func (k *KrpcParse) parseService() error {
+// parse service service {rpc getResp(Req req) return Resp}
+func (k *KrpcParse) parseService(serviceName string) error {
+	k.parseSpace()
+	if k.meta[k.idx] != '{' {
+		return &ParseError{desc: "{ should be append after message"}
+	}
+	k.idx++
+	for k.idx < len(k.meta) && k.meta[k.idx] != '}' {
+		funcName, err := k.parseFuncName()
+		if err != nil {
+			return err
+		}
+		ins, err := k.parseParams()
+		if err != nil {
+			return err
+		}
+		if err := k.skipReturn(); err != nil {
+			return err
+		}
+		outs, err := k.parseParams()
+		if err != nil {
+			return err
+		}
+		k.service[funcName] = ServiceInfo{ins: ins, outs: outs}
+		k.parseSpace()
+	}
+	if k.idx >= len(k.meta) || k.meta[k.idx] != '}' {
+		return &ParseError{desc: "} should warp the message"}
+	}
+	k.idx++
+	k.parseSpace()
 	return nil
+}
+
+func (k *KrpcParse) skipReturn() error {
+	k.parseSpace()
+	if k.idx+6 < len(k.meta) && !byteSliceEqual(k.meta[k.idx:k.idx+6], "return") {
+		return &ParseError{desc: "miss return in service"}
+	}
+	k.idx += 6
+	return nil
+}
+
+func (k *KrpcParse) parseParams() ([]Param, error) {
+	k.parseSpace()
+	if k.idx+1 < len(k.meta) && k.meta[k.idx] != '(' {
+		return nil, &ParseError{desc: "( shoule be append after function name or returns field"}
+	}
+	k.idx++
+	res := []Param{}
+	for k.idx < len(k.meta) {
+		t, err := k.parseType()
+		if err != nil {
+			return nil, err
+		}
+		n, err := k.parseName()
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, Param{Type: t, Name: n})
+		k.parseSpace()
+		if k.idx < len(k.meta) && k.meta[k.idx] == ')' {
+			break
+		} else if k.idx < len(k.meta) && k.meta[k.idx] == ',' {
+			k.idx++
+			continue
+		}
+	}
+	if k.idx >= len(k.meta) || k.meta[k.idx] != ')' {
+		return nil, &ParseError{desc: "( shoule be append after function name or returns field"}
+	}
+	k.idx++
+	k.parseSpace()
+	return res, nil
+}
+
+func (k *KrpcParse) parseFuncName() (string, error) {
+	k.parseSpace()
+	if k.idx+3 < len(k.meta) && !byteSliceEqual(k.meta[k.idx:k.idx+3], "rpc") {
+		return "", &ParseError{desc: "syntax error not found 'rpc'"}
+	}
+	k.idx += 3
+	k.parseSpace()
+	start := k.idx
+	for k.idx < len(k.meta) {
+		if k.meta[k.idx] != '(' && k.meta[k.idx] != ' ' {
+			k.idx++
+		} else {
+			break
+		}
+	}
+	return string(k.meta[start:k.idx]), nil
 }
 
 // parse \n and ' '
@@ -191,12 +334,18 @@ func (k *KrpcParse) parseSpace() {
 }
 
 // parse ;
-func (k *KrpcParse) parseDot() {
+func (k *KrpcParse) parseDot() error {
 	k.parseSpace()
+	flag := false
 	for k.idx < len(k.meta) && k.meta[k.idx] == ';' {
 		k.idx++
+		flag = true
 		k.parseSpace()
 	}
+	if !flag {
+		return &ParseError{desc: "miss ';' in the message field"}
+	}
+	return nil
 }
 
 func byteSliceEqual(a []byte, b string) bool {
