@@ -4,13 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"kRpc/pkg/klog"
+	"klog"
 	"os"
 	"path/filepath"
 	"unicode"
 )
 
-var TypeEnum = []string{"string", "int", "float", "void"}
+var TypeEnum = []string{"string", "int32", "int64", "float", "void"}
 
 type ParseError struct {
 	desc string
@@ -42,6 +42,10 @@ type KrpcParse struct {
 	service map[string]ServiceInfo
 }
 
+func (k *KrpcParse) ToPrint() {
+	klog.Infof("meta: %s \nversion: %s \nmessage: %v \nservice: %v \nidx: %d", string(k.meta), k.version, k.message, k.service, k.idx)
+}
+
 func (k *KrpcParse) Parse(path string) error {
 	if _, err := os.Stat(path); err != nil {
 		klog.Errf("file not exist: %s err: %v\n", path, err.Error())
@@ -58,8 +62,7 @@ func (k *KrpcParse) Parse(path string) error {
 		return err
 	}
 	k.meta = idl
-	k.parse()
-	return nil
+	return k.parse()
 }
 
 // 总体的parse函数
@@ -119,6 +122,7 @@ func (k *KrpcParse) parseBlockName() (string, error) {
 func (k *KrpcParse) parseVersion() error {
 	k.parseSpace()
 	if k.idx+7 < len(k.meta) && byteSliceEqual(k.meta[k.idx:k.idx+7], "version") {
+		k.idx += 7
 		if err := k.parseEqual(); err != nil {
 			return err
 		}
@@ -144,6 +148,7 @@ func (k *KrpcParse) parseVersion() error {
 func (k *KrpcParse) parseEqual() error {
 	k.parseSpace()
 	if k.idx < len(k.meta) && k.meta[k.idx] == '=' {
+		k.idx++
 		return nil
 	}
 	return &ParseError{desc: "miss ="}
@@ -179,14 +184,14 @@ func (k *KrpcParse) parseType() (string, error) {
 			return string(k.meta[start:k.idx]), nil
 		}
 	}
-	return "", &ParseError{desc: fmt.Sprintf("not found the type in %v", TypeEnum)}
+	return "", &ParseError{desc: fmt.Sprintf("%s not found the type in %v and %v", k.meta[start:k.idx], TypeEnum, k.message)}
 }
 
 // 解析名字
 func (k *KrpcParse) parseName() (string, error) {
 	k.parseSpace()
 	start := k.idx
-	for k.idx < len(k.meta) && k.meta[k.idx] != ' ' && k.meta[k.idx] != '=' {
+	for k.idx < len(k.meta) && k.meta[k.idx] != ' ' && k.meta[k.idx] != '=' && k.meta[k.idx] != ')' {
 		k.idx++
 	}
 	if k.idx >= len(k.meta) {
@@ -221,6 +226,9 @@ func (k *KrpcParse) parseMessage(messageName string) error {
 		}
 		if err := k.parseDot(); err != nil {
 			return err
+		}
+		if k.message[messageName] == nil {
+			k.message[messageName] = map[string]FieldPair{}
 		}
 		k.message[messageName][n] = FieldPair{Type: t, SequenceNumber: s}
 	}
@@ -268,7 +276,7 @@ func (k *KrpcParse) parseService(serviceName string) error {
 
 func (k *KrpcParse) skipReturn() error {
 	k.parseSpace()
-	if k.idx+6 < len(k.meta) && !byteSliceEqual(k.meta[k.idx:k.idx+6], "return") {
+	if k.idx+6 >= len(k.meta) || !byteSliceEqual(k.meta[k.idx:k.idx+6], "return") {
 		return &ParseError{desc: "miss return in service"}
 	}
 	k.idx += 6
@@ -277,12 +285,13 @@ func (k *KrpcParse) skipReturn() error {
 
 func (k *KrpcParse) parseParams() ([]Param, error) {
 	k.parseSpace()
-	if k.idx+1 < len(k.meta) && k.meta[k.idx] != '(' {
+	if k.idx+1 >= len(k.meta) || k.meta[k.idx] != '(' {
 		return nil, &ParseError{desc: "( shoule be append after function name or returns field"}
 	}
 	k.idx++
 	res := []Param{}
 	for k.idx < len(k.meta) {
+		k.parseSpace()
 		t, err := k.parseType()
 		if err != nil {
 			return nil, err
@@ -293,6 +302,7 @@ func (k *KrpcParse) parseParams() ([]Param, error) {
 		}
 		res = append(res, Param{Type: t, Name: n})
 		k.parseSpace()
+		klog.Errf("test %s\n", string(k.meta[k.idx]))
 		if k.idx < len(k.meta) && k.meta[k.idx] == ')' {
 			break
 		} else if k.idx < len(k.meta) && k.meta[k.idx] == ',' {
@@ -310,7 +320,7 @@ func (k *KrpcParse) parseParams() ([]Param, error) {
 
 func (k *KrpcParse) parseFuncName() (string, error) {
 	k.parseSpace()
-	if k.idx+3 < len(k.meta) && !byteSliceEqual(k.meta[k.idx:k.idx+3], "rpc") {
+	if k.idx+3 >= len(k.meta) || !byteSliceEqual(k.meta[k.idx:k.idx+3], "rpc") {
 		return "", &ParseError{desc: "syntax error not found 'rpc'"}
 	}
 	k.idx += 3
@@ -328,7 +338,7 @@ func (k *KrpcParse) parseFuncName() (string, error) {
 
 // parse \n and ' '
 func (k *KrpcParse) parseSpace() {
-	for k.idx < len(k.meta) && (k.meta[k.idx] == ' ' || k.meta[k.idx] == '\n' || k.meta[k.idx] == 'r') {
+	for k.idx < len(k.meta) && (k.meta[k.idx] == ' ' || k.meta[k.idx] == '\n' || k.meta[k.idx] == '\r') {
 		k.idx++
 	}
 }
@@ -358,4 +368,13 @@ func byteSliceEqual(a []byte, b string) bool {
 		}
 	}
 	return true
+}
+
+func NewKrpcParse() *KrpcParse {
+	return &KrpcParse{
+		meta:    []byte{},
+		idx:     0,
+		message: map[string]map[string]FieldPair{},
+		service: map[string]ServiceInfo{},
+	}
 }

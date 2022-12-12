@@ -11,6 +11,6 @@ message Resp {
     string mes = 2;
 }
 
-service {
-    rpc getResp(Req req) return (Resp resp)
+service Test {
+    rpc getResp(Req req, int32 ip) return (Resp resp)
 }
