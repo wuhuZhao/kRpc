@@ -302,7 +302,6 @@ func (k *KrpcParse) parseParams() ([]Param, error) {
 		}
 		res = append(res, Param{Type: t, Name: n})
 		k.parseSpace()
-		klog.Errf("test %s\n", string(k.meta[k.idx]))
 		if k.idx < len(k.meta) && k.meta[k.idx] == ')' {
 			break
 		} else if k.idx < len(k.meta) && k.meta[k.idx] == ',' {

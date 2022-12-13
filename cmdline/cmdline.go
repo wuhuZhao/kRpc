@@ -3,13 +3,26 @@ package main
 import (
 	"cmdline/parse"
 	"klog"
+	"os"
+
+	"github.com/spf13/cobra"
 )
 
-// syntax的parse 和 generator
 func main() {
 	kp := parse.NewKrpcParse()
-	if err := kp.Parse("./test.krpc"); err != nil {
-		klog.Errf("err: %s", err.Error())
+	var path string
+	var cmdGenerater = &cobra.Command{
+		Use:   "parse",
+		Short: "parse and generate",
+		Long:  "parse xxx.krpc to generate go's code to use",
+		Run: func(cmd *cobra.Command, args []string) {
+			kp.Parse(path)
+		},
 	}
-	kp.ToPrint()
+	cmdGenerater.Flags().StringVarP(&path, "path", "p", "", "krpc file's path")
+
+	if err := cmdGenerater.Execute(); err != nil {
+		klog.Errf("cmdline error: %v\n", err.Error())
+		os.Exit(1)
+	}
 }
