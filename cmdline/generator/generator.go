@@ -27,7 +27,7 @@ func krpcInterface() string {
 	return `
 	type {{.ServiceName}} interface {
 		{{- range .InterfaceList}}
-		{{.FuncName}} ({{.FuncParam}}) {{.FuncType}}
+		{{.FuncName}} ({{.FuncParam}}) ({{.FuncType}})
 		{{end}}
 	}
 	type {{.ServiceName}}Impl struct {}
