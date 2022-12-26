@@ -31,15 +31,16 @@ type Param struct {
 }
 
 type ServiceInfo struct {
-	ins  []Param
-	outs []Param
+	Ins  []Param
+	Outs []Param
 }
 type KrpcParse struct {
-	meta    []byte
-	version string
-	idx     int
-	message map[string]map[string]FieldPair
-	service map[string]ServiceInfo
+	serviceName string
+	meta        []byte
+	version     string
+	idx         int
+	message     map[string]map[string]FieldPair
+	service     map[string]ServiceInfo
 }
 
 func (k *KrpcParse) ToPrint() {
@@ -90,6 +91,7 @@ func (k *KrpcParse) parse() error {
 				if err != nil {
 					return err
 				}
+				k.serviceName = serviceName
 				if err := k.parseService(serviceName); err != nil {
 					return err
 				}
@@ -263,7 +265,7 @@ func (k *KrpcParse) parseService(serviceName string) error {
 		if err != nil {
 			return err
 		}
-		k.service[funcName] = ServiceInfo{ins: ins, outs: outs}
+		k.service[funcName] = ServiceInfo{Ins: ins, Outs: outs}
 		k.parseSpace()
 	}
 	if k.idx >= len(k.meta) || k.meta[k.idx] != '}' {
