@@ -3,9 +3,13 @@ module kRpc
 go 1.18
 
 require (
+	github.com/hashicorp/consul/api v1.17.0
+	gopkg.in/yaml.v2 v2.4.0
+)
+
+require (
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/fatih/color v1.13.0 // indirect
-	github.com/hashicorp/consul/api v1.17.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-hclog v1.3.1 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
@@ -17,5 +21,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	golang.org/x/sys v0.2.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
+	kRpc/pkg/klog v0.0.0
 )
+
+replace kRpc/pkg/klog => ./pkg/klog

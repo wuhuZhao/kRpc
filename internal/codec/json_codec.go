@@ -2,6 +2,7 @@ package codec
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"sync"
 )
@@ -24,12 +25,12 @@ func (jsc *JSONCodec) Decode(conn io.Reader, msg interface{}) error {
 	if d, ok := jsc.decMap[conn]; ok {
 		dec = d
 	} else {
-		d = json.NewDecoder(conn)
+		dec = json.NewDecoder(conn)
 		jsc.mutex.Lock()
-		jsc.decMap[conn] = d
-		defer jsc.mutex.Unlock()
+		jsc.decMap[conn] = dec
+		jsc.mutex.Unlock()
 	}
-	if err := dec.Decode(msg); err != nil {
+	if err := dec.Decode(errors.New("task")); err != nil {
 		return err
 	}
 	return nil

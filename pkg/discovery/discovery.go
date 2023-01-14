@@ -40,6 +40,7 @@ func RegisterService(dis DiscoveryConfig) error {
 	if dis.UseTCP {
 		check := &consulapi.AgentServiceCheck{}
 		check.TCP = fmt.Sprintf("%s:%d", registration.Address, registration.Port)
+		klog.Infof("check.Tcp: %s\n", check.TCP)
 		check.Timeout = "5s"
 		check.Interval = "5s"
 		check.DeregisterCriticalServiceAfter = "60s"

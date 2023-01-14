@@ -58,6 +58,8 @@ func (s *Server) init(ln *net.Listener, remoteServer common.RemoteServer) {
 	s.ls = ln
 	s.remoteServer = remoteServer
 	s.invoke = s.defaultInvoke
+	s.mutex = &sync.Mutex{}
+	s.method = map[string]map[string]reflect.Value{}
 	//todo start hook
 	for i := 0; i < len(s.startHooks); i++ {
 		go s.startHooks[i].Start()
@@ -133,6 +135,7 @@ func (s *Server) serve(conn net.Conn, final common.Endpoint, errChannel chan err
 	for {
 		// 新建req和resp的对象去解析conn里面的req和返回resp
 		req := &common.Kmessage{}
+		req.RpcInfo = &common.RpcInfo{}
 		if err := s.remoteServer.DecodeRequest(conn, req); err != nil {
 			errChannel <- err
 			// 返回给对端的错误信息
@@ -188,7 +191,7 @@ func (s *Server) Start() {
 	for {
 		select {
 		case err := <-errChannel:
-			klog.Errf("server error in Serve. %v", err.Error())
+			klog.Debugf("server error in Serve. %v", err)
 		default:
 			klog.Debugf("listen server error in Serve")
 		}
@@ -243,7 +246,7 @@ func GetYamlOption(path string) (*option, error) {
 
 // 不读取yaml采用的方式
 func CreateOption(port int, ip, protocol, psm string) *option {
-	return &option{ServerIp: ip, ServerPort: port, ServerProtocol: protocol, CustomizeProps: map[string]interface{}{}}
+	return &option{ServerIp: ip, ServerPort: port, ServerProtocol: protocol, CustomizeProps: map[string]interface{}{}, psm: psm}
 }
 
 func NewDefaultServer(opt *option) (*Server, error) {
