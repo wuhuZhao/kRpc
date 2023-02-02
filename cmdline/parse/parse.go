@@ -39,12 +39,12 @@ type KrpcParse struct {
 	meta        []byte
 	version     string
 	idx         int
-	message     map[string]map[string]FieldPair
-	service     map[string]ServiceInfo
+	Message     map[string]map[string]FieldPair
+	Service     map[string]ServiceInfo
 }
 
 func (k *KrpcParse) ToPrint() {
-	klog.Infof("meta: %s \nversion: %s \nmessage: %v \nservice: %v \nidx: %d", string(k.meta), k.version, k.message, k.service, k.idx)
+	klog.Infof("meta: %s \nversion: %s \nmessage: %v \nservice: %v \nidx: %d", string(k.meta), k.version, k.Message, k.Service, k.idx)
 }
 
 func (k *KrpcParse) Parse(path string) error {
@@ -181,12 +181,12 @@ func (k *KrpcParse) parseType() (string, error) {
 			return string(k.meta[start:k.idx]), nil
 		}
 	}
-	for messageName := range k.message {
+	for messageName := range k.Message {
 		if byteSliceEqual(k.meta[start:k.idx], messageName) {
 			return string(k.meta[start:k.idx]), nil
 		}
 	}
-	return "", &ParseError{desc: fmt.Sprintf("%s not found the type in %v and %v", k.meta[start:k.idx], TypeEnum, k.message)}
+	return "", &ParseError{desc: fmt.Sprintf("%s not found the type in %v and %v", k.meta[start:k.idx], TypeEnum, k.Message)}
 }
 
 // 解析名字
@@ -229,10 +229,10 @@ func (k *KrpcParse) parseMessage(messageName string) error {
 		if err := k.parseDot(); err != nil {
 			return err
 		}
-		if k.message[messageName] == nil {
-			k.message[messageName] = map[string]FieldPair{}
+		if k.Message[messageName] == nil {
+			k.Message[messageName] = map[string]FieldPair{}
 		}
-		k.message[messageName][n] = FieldPair{Type: t, SequenceNumber: s}
+		k.Message[messageName][n] = FieldPair{Type: t, SequenceNumber: s}
 	}
 	if k.meta[k.idx] != '}' || k.idx >= len(k.meta) {
 		return &ParseError{desc: "} should warp the message"}
@@ -265,7 +265,7 @@ func (k *KrpcParse) parseService(serviceName string) error {
 		if err != nil {
 			return err
 		}
-		k.service[funcName] = ServiceInfo{Ins: ins, Outs: outs}
+		k.Service[funcName] = ServiceInfo{Ins: ins, Outs: outs}
 		k.parseSpace()
 	}
 	if k.idx >= len(k.meta) || k.meta[k.idx] != '}' {
@@ -375,7 +375,7 @@ func NewKrpcParse() *KrpcParse {
 	return &KrpcParse{
 		meta:    []byte{},
 		idx:     0,
-		message: map[string]map[string]FieldPair{},
-		service: map[string]ServiceInfo{},
+		Message: map[string]map[string]FieldPair{},
+		Service: map[string]ServiceInfo{},
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"cmdline/parse"
 	"io/fs"
 	"io/ioutil"
+	"klog"
+	"os"
 	"strings"
 	"text/template"
 )
@@ -18,14 +20,14 @@ type krpcGenerator struct {
 	serviceName       string
 }
 
-func NewKrpcGnerator(msgPath, servicePath string, message map[string]map[string]parse.FieldPair, service map[string]parse.ServiceInfo) *krpcGenerator {
-
+func NewKrpcGnerator(serviceName string, message map[string]map[string]parse.FieldPair, service map[string]parse.ServiceInfo) *krpcGenerator {
 	return &krpcGenerator{
 		messageTemplate:   krpcMessage(),
 		serviceTemplate:   krpcMessage(),
 		interfaceTemplate: krpcInterface(),
 		message:           message,
 		service:           service,
+		serviceName:       serviceName,
 	}
 }
 
@@ -36,13 +38,15 @@ func krpcInterface() string {
 		{{.FuncName}} ({{.FuncParam}}) ({{.FuncType}})
 		{{end}}
 	}
-	type {{.ServiceName}}Impl struct {}
-	var _ {{.ServiceName}} = (*{{.ServiceName}}Impl)(nil)
 	`
 }
 
 func krpcService() string {
-	return `func (impl *{{.ServiceName}}Impl) {{.FuncName}} ({{.FuncParam}}) ({{.FuncType}})  {
+	return `
+	type {{.ServiceName}}Impl struct {}
+	var _ {{.ServiceName}} = (*{{.ServiceName}}Impl)(nil)
+	
+	func (impl *{{.ServiceName}}Impl) {{.FuncName}} ({{.FuncParam}}) ({{.FuncType}})  {
 		return {{.ReturnNil}}
 	}`
 }
@@ -59,18 +63,32 @@ func krpcMessage() string {
 func (k *krpcGenerator) Generate() error {
 	tpl := template.New("tmpl")
 	code := &strings.Builder{}
+	os.Mkdir("gen", os.ModePerm)
+	code.WriteString("package gen\n")
 	if err := k.generateInterface(code, tpl); err != nil {
 		return err
 	}
 	code.WriteByte('\n')
+	if err := ioutil.WriteFile("gen/generator_krpc_ineterface.go", []byte(code.String()), fs.ModeAppend); err != nil {
+		klog.Info("test")
+		return err
+	}
+	code.Reset()
+	code.WriteString("package gen\n")
 	if err := k.generateMessage(code, tpl); err != nil {
 		return err
 	}
 	code.WriteByte('\n')
+	if err := ioutil.WriteFile("gen/generator_krpc_message.go", []byte(code.String()), fs.ModeAppend); err != nil {
+		return err
+	}
+	code.Reset()
+	code.WriteString("package main\n")
 	if err := k.generatService(code, tpl); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile("./generator_krpc.go", []byte(code.String()), fs.ModeAppend); err != nil {
+	code.WriteByte('\n')
+	if err := ioutil.WriteFile("handler.go", []byte(code.String()), fs.ModeAppend); err != nil {
 		return err
 	}
 	return nil
@@ -83,6 +101,9 @@ func (k *krpcGenerator) generatService(code *strings.Builder, tpl *template.Temp
 	}
 	info := map[string]string{
 		"ServiceName": k.serviceName,
+		"FuncName":    "",
+		"FuncParam":   "",
+		"FuncType":    "",
 	}
 	for funcName, serviceInfo := range k.service {
 		info["FuncName"] = funcName
@@ -116,6 +137,7 @@ func (k *krpcGenerator) generateMessage(code *strings.Builder, tpl *template.Tem
 	for messageName, messageInfo := range k.message {
 		info := map[string]interface{}{}
 		info["StructName"] = messageName
+		info["StructFieldList"] = []map[string]string{}
 		for fieldName, FieldInfo := range messageInfo {
 			info["StructFieldList"] = append(info["StructFieldList"].([]map[string]string),
 				map[string]string{
@@ -139,7 +161,8 @@ func (k *krpcGenerator) generateInterface(code *strings.Builder, tpl *template.T
 		return err
 	}
 	info := map[string]interface{}{
-		"ServiceName": k.serviceName,
+		"ServiceName":   k.serviceName,
+		"InterfaceList": []map[string]string{},
 	}
 	for funcName, serviceInfo := range k.service {
 		info["InterfaceList"] = append(info["InterfaceList"].([]map[string]string), map[string]string{
